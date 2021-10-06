@@ -163,7 +163,8 @@ int smb2_deltree(struct smb2_tree *tree, const char *dname)
 	create_parm.in.share_access = 
 		NTCREATEX_SHARE_ACCESS_READ|
 		NTCREATEX_SHARE_ACCESS_WRITE;
-	create_parm.in.create_options = NTCREATEX_OPTIONS_DIRECTORY;
+	create_parm.in.create_options = NTCREATEX_OPTIONS_DIRECTORY |
+	    NTCREATEX_OPTIONS_REPARSE_POINT;
 	create_parm.in.create_disposition = NTCREATEX_DISP_OPEN;
 	create_parm.in.fname = dname;
 

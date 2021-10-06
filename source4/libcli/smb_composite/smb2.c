@@ -101,7 +101,8 @@ struct composite_context *smb2_composite_unlink_send(struct smb2_tree *tree,
 		NTCREATEX_SHARE_ACCESS_WRITE;
 	create_parm.in.create_options = 
 		NTCREATEX_OPTIONS_DELETE_ON_CLOSE |
-		NTCREATEX_OPTIONS_NON_DIRECTORY_FILE;
+		NTCREATEX_OPTIONS_NON_DIRECTORY_FILE |
+		NTCREATEX_OPTIONS_REPARSE_POINT;
 	create_parm.in.fname = io->unlink.in.pattern;
 	if (create_parm.in.fname[0] == '\\') {
 		create_parm.in.fname++;
@@ -244,7 +245,8 @@ struct composite_context *smb2_composite_rmdir_send(struct smb2_tree *tree,
 		NTCREATEX_SHARE_ACCESS_WRITE;
 	create_parm.in.create_options = 
 		NTCREATEX_OPTIONS_DIRECTORY |
-		NTCREATEX_OPTIONS_DELETE_ON_CLOSE;
+		NTCREATEX_OPTIONS_DELETE_ON_CLOSE |
+		NTCREATEX_OPTIONS_REPARSE_POINT;
 	create_parm.in.fname = io->in.path;
 	if (create_parm.in.fname[0] == '\\') {
 		create_parm.in.fname++;
