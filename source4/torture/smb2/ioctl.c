@@ -55,6 +55,14 @@
 		goto done; \
 	}} while (0)
 
+#define CHECK_REPARSE(tctx, tree, mem_ctx, h, is_reparse) do {		\
+	if (!test_check_reparse(tctx, tree, mem_ctx, h, is_reparse)) {	\
+		torture_result(tctx, TORTURE_FAIL, __location__": File is unexpectedly%s a reparse point", \
+		       is_reparse ? " not": "");			\
+		ret = false; \
+		goto done; \
+	}} while (0)
+
 
 /*
    basic testing of SMB2 shadow copy calls
@@ -6952,7 +6960,7 @@ static bool test_symlink_verify_contents(struct torture_context *tctx,
 	NTSTATUS status = NT_STATUS_OK;
 	bool ret = true;
 
-	ASSERT(test_check_reparse(tctx, tree, mem_ctx, h, true));
+	CHECK_REPARSE(tctx, tree, mem_ctx, h, true);
 
 	status = test_get_reparse(tree, mem_ctx, h, &buf, &buflen);
 	CHECK_STATUS(status, NT_STATUS_OK);
@@ -7214,12 +7222,12 @@ static bool test_ioctl_symlink_delete(struct torture_context *tctx,
 	status = test_del_reparse(tree, mem_ctx, &fh);
 	CHECK_STATUS(status, NT_STATUS_OK);
 
-	ASSERT(test_check_reparse(tctx, tree, mem_ctx, &fh, false));
+	CHECK_REPARSE(tctx, tree, mem_ctx, &fh, false);
 
 	status = test_del_reparse(tree, mem_ctx, &dh);
 	CHECK_STATUS(status, NT_STATUS_OK);
 
-	ASSERT(test_check_reparse(tctx, tree, mem_ctx, &dh, false));
+	CHECK_REPARSE(tctx, tree, mem_ctx, &dh, false);
 
 done:
 	smb2_util_close(tree, h);
@@ -7734,6 +7742,126 @@ done:
 	return (ret);
 }
 
+static bool test_ioctl_symlink_test_overwrite(struct torture_context *tctx,
+    struct smb2_tree *tree)
+{
+	struct smb2_handle fh = {{0}}, dh = {{0}};
+	struct smb2_create io;
+	NTSTATUS status;
+	TALLOC_CTX *mem_ctx = talloc_new(tctx);
+	bool ret = true;
+
+	if (!test_ioctl_setup_symlink_test(tctx, tree, mem_ctx, &fh, &dh)) {
+		talloc_free(mem_ctx);
+		return (false);
+	}
+
+	ZERO_STRUCT(io);
+	io.in.fname = SYMLINK_FILE ":filestream";
+	io.in.desired_access = SEC_FLAG_MAXIMUM_ALLOWED;
+	io.in.file_attributes = FILE_ATTRIBUTE_NORMAL;
+	io.in.create_disposition = NTCREATEX_DISP_CREATE;
+	io.in.create_options = NTCREATEX_OPTIONS_REPARSE_POINT;
+	io.in.share_access = smb2_util_share_access("RWD");
+	status = smb2_create(tree, mem_ctx, &io);
+	CHECK_STATUS(status, NT_STATUS_OK);
+	smb2_util_close(tree, io.out.file.handle);
+
+	ASSERT(test_symlink_verify_contents(tctx, tree, &fh, TARGET_FILE,
+	    mem_ctx));
+
+	ZERO_STRUCT(io);
+	io.in.fname = SYMLINK_FILE ":filestream";
+	io.in.desired_access = SEC_FLAG_MAXIMUM_ALLOWED;
+	io.in.file_attributes = FILE_ATTRIBUTE_NORMAL;
+	io.in.create_disposition = NTCREATEX_DISP_OVERWRITE;
+	io.in.create_options = NTCREATEX_OPTIONS_REPARSE_POINT;
+	io.in.share_access = smb2_util_share_access("RWD");
+	status = smb2_create(tree, mem_ctx, &io);
+	CHECK_STATUS(status, NT_STATUS_OK);
+	smb2_util_close(tree, io.out.file.handle);
+
+	ASSERT(test_symlink_verify_contents(tctx, tree, &fh, TARGET_FILE,
+	    mem_ctx));
+
+	ZERO_STRUCT(io);
+	io.in.fname = SYMLINK_FILE;
+	io.in.desired_access = SEC_FILE_READ_ATTRIBUTE|SEC_FILE_WRITE_DATA;
+	io.in.file_attributes = FILE_ATTRIBUTE_NORMAL;
+	io.in.create_disposition = NTCREATEX_DISP_OVERWRITE;
+	io.in.create_options = NTCREATEX_OPTIONS_REPARSE_POINT;
+	io.in.share_access = smb2_util_share_access("RWD");
+	status = smb2_create(tree, mem_ctx, &io);
+	CHECK_STATUS(status, NT_STATUS_OK);
+
+	CHECK_REPARSE(tctx, tree, mem_ctx, &fh, false);
+
+done:
+	test_ioctl_symlink_cleanup(tree, &fh, &dh);
+	talloc_free(mem_ctx);
+	return (ret);
+}
+
+static bool test_ioctl_symlink_test_supersede(struct torture_context *tctx,
+    struct smb2_tree *tree)
+{
+	struct smb2_handle fh = {{0}}, dh = {{0}};
+	struct smb2_create io;
+	NTSTATUS status;
+	TALLOC_CTX *mem_ctx = talloc_new(tctx);
+	bool ret = true;
+
+	if (!test_ioctl_setup_symlink_test(tctx, tree, mem_ctx, &fh, &dh)) {
+		talloc_free(mem_ctx);
+		return (false);
+	}
+
+	ZERO_STRUCT(io);
+	io.in.fname = SYMLINK_FILE ":filestream";
+	io.in.desired_access = SEC_FLAG_MAXIMUM_ALLOWED;
+	io.in.file_attributes = FILE_ATTRIBUTE_NORMAL;
+	io.in.create_disposition = NTCREATEX_DISP_CREATE;
+	io.in.create_options = NTCREATEX_OPTIONS_REPARSE_POINT;
+	io.in.share_access = smb2_util_share_access("RWD");
+	status = smb2_create(tree, mem_ctx, &io);
+	CHECK_STATUS(status, NT_STATUS_OK);
+	smb2_util_close(tree, io.out.file.handle);
+
+	ASSERT(test_symlink_verify_contents(tctx, tree, &fh, TARGET_FILE,
+	    mem_ctx));
+
+	ZERO_STRUCT(io);
+	io.in.fname = SYMLINK_FILE ":filestream";
+	io.in.desired_access = SEC_FLAG_MAXIMUM_ALLOWED;
+	io.in.file_attributes = FILE_ATTRIBUTE_NORMAL;
+	io.in.create_disposition = NTCREATEX_DISP_SUPERSEDE;
+	io.in.create_options = NTCREATEX_OPTIONS_REPARSE_POINT;
+	io.in.share_access = smb2_util_share_access("RWD");
+	status = smb2_create(tree, mem_ctx, &io);
+	CHECK_STATUS(status, NT_STATUS_OK);
+	smb2_util_close(tree, io.out.file.handle);
+
+	ASSERT(test_symlink_verify_contents(tctx, tree, &fh, TARGET_FILE,
+	    mem_ctx));
+
+	ZERO_STRUCT(io);
+	io.in.fname = SYMLINK_FILE;
+	io.in.desired_access = SEC_FILE_READ_ATTRIBUTE|SEC_FILE_WRITE_DATA;
+	io.in.file_attributes = FILE_ATTRIBUTE_NORMAL;
+	io.in.create_disposition = NTCREATEX_DISP_SUPERSEDE;
+	io.in.create_options = NTCREATEX_OPTIONS_REPARSE_POINT;
+	io.in.share_access = smb2_util_share_access("RWD");
+	status = smb2_create(tree, mem_ctx, &io);
+	CHECK_STATUS(status, NT_STATUS_OK);
+
+	CHECK_REPARSE(tctx, tree, mem_ctx, &fh, false);
+
+done:
+	test_ioctl_symlink_cleanup(tree, &fh, &dh);
+	talloc_free(mem_ctx);
+	return (ret);
+}
+
 /*
  * testing of SMB2 ioctls
  */
@@ -7902,6 +8030,10 @@ struct torture_suite *torture_smb2_ioctl_init(TALLOC_CTX *ctx)
 				     test_ioctl_symlink_add_stream);
 	torture_suite_add_1smb2_test(suite, "symlink_get_stream",
 				     test_ioctl_symlink_get_stream);
+	torture_suite_add_1smb2_test(suite, "symlink_test_overwrite",
+				     test_ioctl_symlink_test_overwrite);
+	torture_suite_add_1smb2_test(suite, "symlink_test_supersede",
+				     test_ioctl_symlink_test_supersede);
 	torture_suite_add_1smb2_test(suite, "symlink_test_locks",
 				     test_ioctl_symlink_test_locks);
 	torture_suite_add_1smb2_test(suite, "symlink_test_link",
